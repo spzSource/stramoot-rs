@@ -9,3 +9,5 @@ edition = "2021"
 reqwest = { version = "0.11.23", features = ["json"] }
 tokio = { version = "1.35.1", features = ["full"] }
 serde = { version = "1.0.193", features = ["derive"] }
+clap = { version="4.4.12", features = ["derive"] }
+chrono = "0.4.31"
