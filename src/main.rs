@@ -1,18 +1,11 @@
 use clap::Parser;
-use komoot::cli::KomootOpts;
 
+mod cli;
 mod komoot;
-
-#[derive(Debug, Parser)]
-#[clap(name = "stramoot", version)]
-pub struct Cli {
-    #[clap(flatten)]
-    pub komoot: KomootOpts,
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
+    let cli = cli::Cli::parse();
 
     let http_client = reqwest::Client::new();
     let api = komoot::client::ApiContext::new("https://api.komoot.de", &http_client)

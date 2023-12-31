@@ -1,4 +1,11 @@
-use clap::{self, Args};
+use clap::{self, Args, Parser};
+
+#[derive(Debug, Parser)]
+#[clap(name = "stramoot", version)]
+pub struct Cli {
+    #[clap(flatten)]
+    pub komoot: KomootOpts,
+}
 
 #[derive(Debug, Args)]
 pub struct KomootOpts {
