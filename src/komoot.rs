@@ -1,4 +1,4 @@
-use chrono::{FixedOffset, Local};
+use chrono::FixedOffset;
 use clap::{self, Args};
 use serde::Deserialize;
 
@@ -65,29 +65,28 @@ impl ApiContext {
         start_date: chrono::DateTime<chrono::Utc>,
         limit: u16,
     ) -> Result<Vec<Tour>, Box<dyn std::error::Error>> {
-        let context = self.user_context.as_ref().expect(
-            "User context must not be empty. Make sure that auth(...) is called before calling this method.");
+        let ctx = self.context();
+
+        let query_params = &[
+            ("limit", limit.to_string()),
+            ("page", "0".to_owned()),
+            ("type", "tour_recorded".to_owned()),
+            (
+                "start_date",
+                start_date
+                    .with_timezone::<FixedOffset>(&chrono::FixedOffset::west_opt(7 * 3600).unwrap())
+                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, false),
+            ),
+        ];
 
         let resp = self
             .http_client
             .get(format!(
                 "{0}/v007/users/{1}/tours/",
-                self.base_url, context.user_id
+                self.base_url, ctx.user_id
             ))
-            .basic_auth(&context.email, Some(&context.token))
-            .query(&[
-                ("limit", limit.to_string()),
-                ("page", "0".to_owned()),
-                ("type", "tour_recorded".to_owned()),
-                (
-                    "start_date",
-                    start_date
-                        .with_timezone::<FixedOffset>(
-                            &chrono::FixedOffset::west_opt(7 * 3600).unwrap(),
-                        )
-                        .to_rfc3339_opts(chrono::SecondsFormat::Millis, false),
-                ),
-            ])
+            .basic_auth(&ctx.email, Some(&ctx.token))
+            .query(query_params)
             .send()
             .await?
             .error_for_status()?;
@@ -100,15 +99,32 @@ impl ApiContext {
 
         Ok(tours)
     }
+
+    pub async fn download(&self, id: u32) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let ctx = self.context();
+        let url = format!("{0}/v007/tours/{1}.gpx", self.base_url, id);
+        let req = self
+            .http_client
+            .get(url)
+            .basic_auth(&ctx.email, Some(&ctx.token));
+        let resp = req.send().await?.error_for_status()?;
+
+        Ok(resp.bytes().await?.to_vec())
+    }
+
+    fn context(&self) -> &UserContext {
+        self.user_context.as_ref().expect(
+            "User context must not be empty. Make sure that auth(...) is called before calling this method.")
+    }
 }
 
 #[derive(Debug, Deserialize)]
 pub struct Tour {
-    id: u32,
-    name: String,
-    status: String,
-    r#type: String,
-    date: String,
+    pub id: u32,
+    pub name: String,
+    pub status: String,
+    pub r#type: String,
+    pub date: String,
 }
 
 #[derive(Debug, Deserialize)]

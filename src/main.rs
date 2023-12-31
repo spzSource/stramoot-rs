@@ -15,9 +15,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     let http_client = reqwest::Client::new();
-    let tours = komoot::ApiContext::new("https://api.komoot.de", &http_client)
+    let api = komoot::ApiContext::new("https://api.komoot.de", &http_client)
         .auth(&cli.komoot.user_name, &cli.komoot.password)
-        .await?
+        .await?;
+    let tours = api
         .tours(
             chrono::Utc::now()
                 .checked_sub_months(chrono::Months::new(6))
@@ -25,6 +26,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             10,
         )
         .await?;
+
+    match tours.first() {
+        Some(tour) => {
+            println!("Tour {:?}", tour);
+            println!("Content len: {0}", api.download(tour.id).await?.len())
+        }
+        None => println!("No tours"),
+    }
 
     println!("{:?}", tours);
 
