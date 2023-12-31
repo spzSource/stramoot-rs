@@ -1,7 +1,7 @@
 use chrono::FixedOffset;
 use serde::Deserialize;
 
-use super::models::{Tour, ToursContainer};
+use super::models::Tour;
 
 pub struct ApiContext {
     base_url: String,
