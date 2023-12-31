@@ -1,15 +1,7 @@
 use chrono::FixedOffset;
-use clap::{self, Args};
 use serde::Deserialize;
 
-#[derive(Debug, Args)]
-pub struct KomootOpts {
-    #[clap(short = 'u', long = "user-name")]
-    pub user_name: String,
-
-    #[clap(short = 'p', long = "password")]
-    pub password: String,
-}
+use super::models::{Tour, ToursContainer};
 
 pub struct ApiContext {
     base_url: String,
@@ -116,24 +108,4 @@ impl ApiContext {
         self.user_context.as_ref().expect(
             "User context must not be empty. Make sure that auth(...) is called before calling this method.")
     }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Tour {
-    pub id: u32,
-    pub name: String,
-    pub status: String,
-    pub r#type: String,
-    pub date: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct Embedded {
-    tours: Vec<Tour>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ToursContainer {
-    #[serde(rename = "_embedded")]
-    embedded: Option<Embedded>,
 }

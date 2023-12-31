@@ -1,5 +1,5 @@
 use clap::Parser;
-use komoot::KomootOpts;
+use komoot::cli::KomootOpts;
 
 mod komoot;
 
@@ -15,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     let http_client = reqwest::Client::new();
-    let api = komoot::ApiContext::new("https://api.komoot.de", &http_client)
+    let api = komoot::client::ApiContext::new("https://api.komoot.de", &http_client)
         .auth(&cli.komoot.user_name, &cli.komoot.password)
         .await?;
     let tours = api
