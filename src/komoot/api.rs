@@ -19,8 +19,8 @@ pub struct UserContext {
 }
 
 impl ApiContext {
-    pub fn new(url: &str, client: &reqwest::Client) -> ApiContext {
-        ApiContext {
+    pub fn new(url: &str, client: &reqwest::Client) -> Self {
+        Self {
             base_url: url.to_string(),
             http_client: client.clone(),
             user_context: None,
@@ -32,23 +32,18 @@ impl ApiContext {
         username: &str,
         password: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let user_context = self
+        let url = format!("{0}/v006/account/email/{1}/", self.base_url, username);
+        let req = self
             .http_client
-            .get(format!(
-                "{0}/v006/account/email/{1}/",
-                self.base_url, username
-            ))
-            .basic_auth(username, Some(password))
-            .send()
-            .await?
-            .error_for_status()?
-            .json::<UserContext>()
-            .await?;
+            .get(url)
+            .basic_auth(username, Some(password));
+        let resp = req.send().await?.error_for_status()?;
+        let ctx = resp.json::<UserContext>().await?;
 
         Ok(ApiContext {
             base_url: self.base_url.to_owned(),
             http_client: self.http_client.clone(),
-            user_context: Some(user_context),
+            user_context: Some(ctx),
         })
     }
 
@@ -71,18 +66,13 @@ impl ApiContext {
             ),
         ];
 
-        let resp = self
+        let url = format!("{0}/v007/users/{1}/tours/", self.base_url, ctx.user_id);
+        let req = self
             .http_client
-            .get(format!(
-                "{0}/v007/users/{1}/tours/",
-                self.base_url, ctx.user_id
-            ))
+            .get(url)
             .basic_auth(&ctx.email, Some(&ctx.token))
-            .query(query_params)
-            .send()
-            .await?
-            .error_for_status()?;
-
+            .query(query_params);
+        let resp = req.send().await?.error_for_status()?;
         let tours = resp
             .json::<ToursContainer>()
             .await?

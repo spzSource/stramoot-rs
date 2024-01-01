@@ -1,3 +1,5 @@
+use std::ops::Sub;
+
 use clap::Parser;
 
 mod cli;
@@ -8,17 +10,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::Cli::parse();
 
     let http_client = reqwest::Client::new();
-    let api = komoot::client::ApiContext::new("https://api.komoot.de", &http_client)
+    let api = komoot::api::ApiContext::new("https://api.komoot.de", &http_client)
         .auth(&cli.komoot.user_name, &cli.komoot.password)
         .await?;
-    let tours = api
-        .tours(
-            chrono::Utc::now()
-                .checked_sub_months(chrono::Months::new(6))
-                .unwrap(),
-            10,
-        )
-        .await?;
+    let tours = api.tours(chrono::Utc::now().sub(cli.interval), cli.limit).await?;
 
     match tours.first() {
         Some(tour) => {
@@ -27,8 +22,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         None => println!("No tours"),
     }
-
-    println!("{:?}", tours);
 
     Ok(())
 }
