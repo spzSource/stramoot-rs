@@ -4,7 +4,7 @@ use oauth2::{
 };
 use reqwest::multipart;
 
-use super::models::UploadStatus;
+use super::models::{UploadError, UploadStatus};
 
 #[derive(Debug)]
 pub struct ApiContext {
@@ -59,32 +59,76 @@ impl ApiContext {
         name: &str,
         content: &[u8],
     ) -> Result<UploadStatus, Box<dyn std::error::Error>> {
-        let token = self
-            .access_token
-            .as_ref()
-            .expect("Access token is empty, make sure that auth(...) was called.");
-
         let resp = self
             .http_client
             .post(format!("{}/api/v3/uploads", Self::BASE_URL))
-            .bearer_auth(token.secret())
+            .bearer_auth(self.access_token().secret())
             .multipart(Self::multipart_form(external_id, name, content))
             .send()
-            .await?;
+            .await?
+            .error_for_status()?;
 
         let status = resp.json::<UploadStatus>().await?;
 
         Ok(status)
     }
 
+    pub async fn upload_status(
+        &self,
+        upload_id: i64,
+    ) -> Result<UploadStatus, Box<dyn std::error::Error>> {
+        let resp = self
+            .http_client
+            .get(format!("{}/api/v3/uploads/{}", Self::BASE_URL, upload_id))
+            .bearer_auth(self.access_token().secret())
+            .send()
+            .await?
+            .error_for_status()?;
+
+        let status = resp.json::<UploadStatus>().await?;
+
+        Ok(status)
+    }
+
+    pub async fn wait_for_upload(
+        &self,
+        upload_id: i64,
+        attempts: u8,
+        delay: chrono::Duration,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut retries = 0;
+
+        loop {
+            match self.upload_status(upload_id).await?.to_result() {
+                ok @ Ok(_) => return ok,
+                Err(error) => match error.downcast_ref::<UploadError>() {
+                    Some(upload_error) => match upload_error {
+                        UploadError::InProgress if retries < attempts => {
+                            retries += 1;
+                            tokio::time::sleep(delay.to_std()?).await;
+                        }
+                        _ => return Err(error),
+                    },
+                    None => return Err(error),
+                },
+            }
+        }
+    }
+
     fn multipart_form(external_id: &str, name: &str, content: &[u8]) -> multipart::Form {
         multipart::Form::new()
-            .text("activity_type", "ride")
             .text("trainer", "0")
             .text("commute", "0")
             .text("data_type", "gpx")
+            .text("activity_type", "ride")
             .text("name", name.to_string())
             .text("external_id", external_id.to_string())
             .part("data", multipart::Part::bytes(content.to_owned()))
+    }
+
+    fn access_token(&self) -> &AccessToken {
+        self.access_token
+            .as_ref()
+            .expect("Access token is empty, make sure that auth(...) was called.")
     }
 }

@@ -4,7 +4,6 @@ use serde::Deserialize;
 use super::models::{Tour, ToursContainer};
 
 pub struct ApiContext {
-    base_url: String,
     http_client: reqwest::Client,
     user_context: Option<UserContext>,
 }
@@ -19,9 +18,10 @@ pub struct UserContext {
 }
 
 impl ApiContext {
-    pub fn new(url: &str, client: &reqwest::Client) -> Self {
+    const BASE_URL: &'static str = "https://api.komoot.de";
+
+    pub fn new(client: &reqwest::Client) -> Self {
         Self {
-            base_url: url.to_string(),
             http_client: client.clone(),
             user_context: None,
         }
@@ -32,7 +32,7 @@ impl ApiContext {
         username: &str,
         password: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let url = format!("{0}/v006/account/email/{1}/", self.base_url, username);
+        let url = format!("{0}/v006/account/email/{1}/", Self::BASE_URL, username);
         let req = self
             .http_client
             .get(url)
@@ -41,7 +41,6 @@ impl ApiContext {
         let ctx = resp.json::<UserContext>().await?;
 
         Ok(ApiContext {
-            base_url: self.base_url.to_owned(),
             http_client: self.http_client.clone(),
             user_context: Some(ctx),
         })
@@ -66,7 +65,7 @@ impl ApiContext {
             ),
         ];
 
-        let url = format!("{0}/v007/users/{1}/tours/", self.base_url, ctx.user_id);
+        let url = format!("{0}/v007/users/{1}/tours/", Self::BASE_URL, ctx.user_id);
         let req = self
             .http_client
             .get(url)
@@ -84,7 +83,7 @@ impl ApiContext {
 
     pub async fn download(&self, id: u32) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let ctx = self.context();
-        let url = format!("{0}/v007/tours/{1}.gpx", self.base_url, id);
+        let url = format!("{0}/v007/tours/{1}.gpx", Self::BASE_URL, id);
         let req = self
             .http_client
             .get(url)

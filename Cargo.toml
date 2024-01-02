@@ -13,3 +13,4 @@ clap = { version="4.4.12", features = ["derive"] }
 chrono = "0.4.31"
 iso8601-duration = "0.2.0"
 oauth2 = "4.4.2"
+futures = "0.3.30"
