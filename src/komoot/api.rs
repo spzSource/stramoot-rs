@@ -49,12 +49,10 @@ impl ApiContext {
     pub async fn tours(
         &self,
         start_date: chrono::DateTime<chrono::Utc>,
-        limit: u16,
     ) -> Result<Vec<Tour>, Box<dyn std::error::Error>> {
         let ctx = self.context();
 
         let query_params = &[
-            ("limit", limit.to_string()),
             ("page", "0".to_owned()),
             ("type", "tour_recorded".to_owned()),
             (

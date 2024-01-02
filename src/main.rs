@@ -34,9 +34,7 @@ async fn sync(
     src: &komoot::api::ApiContext,
     dest: &strava::api::ApiContext,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let tours = src
-        .tours(chrono::Utc::now().sub(cli.interval), cli.limit)
-        .await?;
+    let tours = src.tours(chrono::Utc::now().sub(cli.interval)).await?;
 
     let results: Vec<_> = futures::stream::iter(tours)
         .map(|t| sync_tour(&src, &dest, t))

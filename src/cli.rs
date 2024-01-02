@@ -11,9 +11,6 @@ pub struct Cli {
 
     #[clap(short = 'i', long = "interval", value_parser = parse_iso8601, default_value = "P2DT")]
     pub interval: std::time::Duration,
-
-    #[clap(short = 'l', long = "limit")]
-    pub limit: u16,
 }
 
 fn parse_iso8601(duration: &str) -> Result<std::time::Duration, clap::Error> {
