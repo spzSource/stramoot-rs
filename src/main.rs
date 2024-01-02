@@ -38,18 +38,16 @@ async fn sync(
         .tours(chrono::Utc::now().sub(cli.interval), cli.limit)
         .await?;
 
-    let res: Vec<_> = futures::stream::iter(tours)
+    let results: Vec<_> = futures::stream::iter(tours)
         .map(|t| sync_tour(&src, &dest, t))
         .buffered(3)
         .collect()
         .await;
 
-    for r in res {
-        match r {
-            Err(e) => eprintln!("Processing error. {}", e),
-            Ok(_) => (),
-        }
-    }
+    results.into_iter().for_each(|r| match r {
+        Ok(id) => println!("Tour {} uploaded", id),
+        Err(e) => eprintln!("Processing error. {}", e),
+    });
 
     Ok(())
 }
@@ -58,9 +56,7 @@ async fn sync_tour(
     src: &komoot::api::ApiContext,
     dest: &strava::api::ApiContext,
     tour: Tour,
-) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Tour: {:?}", tour);
-
+) -> Result<u32, Box<dyn std::error::Error>> {
     let content = src.download(tour.id).await?;
 
     let status = dest
@@ -70,7 +66,5 @@ async fn sync_tour(
     dest.wait_for_upload(status.id, 10, chrono::Duration::seconds(1))
         .await?;
 
-    println!("Tour: {:?} uploaded.", tour);
-
-    Ok(())
+    Ok(tour.id)
 }
