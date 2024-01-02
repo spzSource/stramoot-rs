@@ -4,6 +4,7 @@ use clap::Parser;
 use cli::Cli;
 use futures::StreamExt;
 use komoot::models::Tour;
+
 mod cli;
 mod komoot;
 mod strava;
@@ -45,7 +46,7 @@ async fn sync(
 
     for r in res {
         match r {
-            Err(e) => println!("Error occured during processing: {:?}", e),
+            Err(e) => eprintln!("Processing error. {}", e),
             Ok(_) => (),
         }
     }

@@ -100,17 +100,12 @@ impl ApiContext {
 
         loop {
             match self.upload_status(upload_id).await?.to_result() {
-                ok @ Ok(_) => return ok,
-                Err(error) => match error.downcast_ref::<UploadError>() {
-                    Some(upload_error) => match upload_error {
-                        UploadError::InProgress if retries < attempts => {
-                            retries += 1;
-                            tokio::time::sleep(delay.to_std()?).await;
-                        }
-                        _ => return Err(error),
-                    },
-                    None => return Err(error),
-                },
+                Err(err @ UploadError::InProgress { id: _ }) if retries < attempts => {
+                    retries += 1;
+                    println!("{}, retrying after {}", err, delay);
+                    tokio::time::sleep(delay.to_std()?).await;
+                }
+                res => return res.map_err(|e| e.into()),
             }
         }
     }

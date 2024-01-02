@@ -16,13 +16,14 @@ pub struct UploadStatus {
 }
 
 impl UploadStatus {
-    pub fn to_result(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn to_result(&self) -> Result<(), UploadError> {
         if let Some(error) = &self.error {
             Err(UploadError::Failed {
+                id: self.id,
                 msg: error.to_string(),
             })?
         } else if self.external_id.is_none() {
-            Err(UploadError::InProgress)?
+            Err(UploadError::InProgress { id: self.id })?
         } else {
             Ok(())
         }
@@ -31,8 +32,8 @@ impl UploadStatus {
 
 #[derive(Debug)]
 pub enum UploadError {
-    InProgress,
-    Failed { msg: String },
+    InProgress { id: i64 },
+    Failed { id: i64, msg: String },
 }
 
 impl Error for UploadError {}
@@ -40,9 +41,9 @@ impl Error for UploadError {}
 impl Display for UploadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UploadError::InProgress => write!(f, "Upload is in progress."),
-            UploadError::Failed { msg: m } => {
-                write!(f, "Unrecoverable error occurred during upload: {}", m)
+            UploadError::InProgress { id } => write!(f, "Upload {}. Upload is in progress", id),
+            UploadError::Failed { id, msg } => {
+                write!(f, "Upload {}. Unrecoverable error: {}", id, msg)
             }
         }
     }
