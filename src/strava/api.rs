@@ -62,7 +62,7 @@ impl ApiContext {
         let resp = self
             .http_client
             .post(format!("{}/api/v3/uploads", Self::BASE_URL))
-            .bearer_auth(self.access_token().secret())
+            .bearer_auth(self.access_token()?.secret())
             .multipart(Self::multipart_form(external_id, name, content))
             .send()
             .await?
@@ -80,7 +80,7 @@ impl ApiContext {
         let resp = self
             .http_client
             .get(format!("{}/api/v3/uploads/{}", Self::BASE_URL, upload_id))
-            .bearer_auth(self.access_token().secret())
+            .bearer_auth(self.access_token()?.secret())
             .send()
             .await?
             .error_for_status()?;
@@ -121,9 +121,13 @@ impl ApiContext {
             .part("data", multipart::Part::bytes(content.to_owned()))
     }
 
-    fn access_token(&self) -> &AccessToken {
-        self.access_token
-            .as_ref()
-            .expect("Access token is empty, make sure that auth(...) was called.")
+    fn access_token(&self) -> Result<&AccessToken, Box<dyn std::error::Error>> {
+        self.access_token.as_ref().ok_or(
+            format!(
+                "Access token is empty, make sure that {} was called.",
+                stringify!(self.auth)
+            )
+            .into(),
+        )
     }
 }

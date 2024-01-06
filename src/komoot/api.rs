@@ -4,7 +4,7 @@ use serde::Deserialize;
 use super::models::{Tour, ToursContainer};
 
 pub struct ApiContext {
-    http_client: reqwest::Client,
+    http: reqwest::Client,
     user_context: Option<UserContext>,
 }
 
@@ -22,7 +22,7 @@ impl ApiContext {
 
     pub fn new(client: &reqwest::Client) -> Self {
         Self {
-            http_client: client.clone(),
+            http: client.clone(),
             user_context: None,
         }
     }
@@ -33,15 +33,12 @@ impl ApiContext {
         password: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let url = format!("{0}/v006/account/email/{1}/", Self::BASE_URL, username);
-        let req = self
-            .http_client
-            .get(url)
-            .basic_auth(username, Some(password));
+        let req = self.http.get(url).basic_auth(username, Some(password));
         let resp = req.send().await?.error_for_status()?;
         let ctx = resp.json::<UserContext>().await?;
 
         Ok(ApiContext {
-            http_client: self.http_client.clone(),
+            http: self.http.clone(),
             user_context: Some(ctx),
         })
     }
@@ -50,7 +47,7 @@ impl ApiContext {
         &self,
         start_date: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<Tour>, Box<dyn std::error::Error>> {
-        let ctx = self.context();
+        let ctx = self.context()?;
 
         let query_params = &[
             ("page", "0".to_owned()),
@@ -65,7 +62,7 @@ impl ApiContext {
 
         let url = format!("{0}/v007/users/{1}/tours/", Self::BASE_URL, ctx.user_id);
         let req = self
-            .http_client
+            .http
             .get(url)
             .basic_auth(&ctx.email, Some(&ctx.token))
             .query(query_params);
@@ -80,19 +77,18 @@ impl ApiContext {
     }
 
     pub async fn download(&self, id: u32) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        let ctx = self.context();
+        let ctx = self.context()?;
         let url = format!("{0}/v007/tours/{1}.gpx", Self::BASE_URL, id);
-        let req = self
-            .http_client
-            .get(url)
-            .basic_auth(&ctx.email, Some(&ctx.token));
+        let req = self.http.get(url).basic_auth(&ctx.email, Some(&ctx.token));
         let resp = req.send().await?.error_for_status()?;
 
         Ok(resp.bytes().await?.to_vec())
     }
 
-    fn context(&self) -> &UserContext {
-        self.user_context.as_ref().expect(
-            "User context must not be empty. Make sure that auth(...) is called before calling this method.")
+    fn context(&self) -> Result<&UserContext, Box<dyn std::error::Error>> {
+        self.user_context.as_ref().ok_or(format!(
+            "User context must not be empty. Make sure that {} is called before calling this method.",
+            stringify!(self.auth)
+        ).into())
     }
 }
