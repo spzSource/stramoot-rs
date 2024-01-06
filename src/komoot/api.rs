@@ -1,10 +1,11 @@
 use chrono::FixedOffset;
+use futures::TryStreamExt;
 use serde::Deserialize;
 
-use super::models::{Tour, ToursContainer};
+use super::models::{DownloadError, Tour, ToursContainer};
 
 pub struct ApiContext {
-    http_client: reqwest::Client,
+    http: reqwest::Client,
     user_context: Option<UserContext>,
 }
 
@@ -22,7 +23,7 @@ impl ApiContext {
 
     pub fn new(client: &reqwest::Client) -> Self {
         Self {
-            http_client: client.clone(),
+            http: client.clone(),
             user_context: None,
         }
     }
@@ -33,15 +34,12 @@ impl ApiContext {
         password: &str,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let url = format!("{0}/v006/account/email/{1}/", Self::BASE_URL, username);
-        let req = self
-            .http_client
-            .get(url)
-            .basic_auth(username, Some(password));
+        let req = self.http.get(url).basic_auth(username, Some(password));
         let resp = req.send().await?.error_for_status()?;
         let ctx = resp.json::<UserContext>().await?;
 
         Ok(ApiContext {
-            http_client: self.http_client.clone(),
+            http: self.http.clone(),
             user_context: Some(ctx),
         })
     }
@@ -65,7 +63,7 @@ impl ApiContext {
 
         let url = format!("{0}/v007/users/{1}/tours/", Self::BASE_URL, ctx.user_id);
         let req = self
-            .http_client
+            .http
             .get(url)
             .basic_auth(&ctx.email, Some(&ctx.token))
             .query(query_params);
@@ -79,16 +77,21 @@ impl ApiContext {
         Ok(tours)
     }
 
-    pub async fn download(&self, id: u32) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub async fn stream(
+        &self,
+        id: u32,
+    ) -> Result<
+        impl futures::Stream<Item = Result<bytes::Bytes, DownloadError>> + 'static,
+        Box<dyn std::error::Error>,
+    > {
         let ctx = self.context();
         let url = format!("{0}/v007/tours/{1}.gpx", Self::BASE_URL, id);
-        let req = self
-            .http_client
-            .get(url)
-            .basic_auth(&ctx.email, Some(&ctx.token));
+        let req = self.http.get(url).basic_auth(&ctx.email, Some(&ctx.token));
         let resp = req.send().await?.error_for_status()?;
 
-        Ok(resp.bytes().await?.to_vec())
+        Ok(resp
+            .bytes_stream()
+            .map_err(move |e| DownloadError::StreamRead { id, inner: e }))
     }
 
     fn context(&self) -> &UserContext {
