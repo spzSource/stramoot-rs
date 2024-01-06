@@ -2,31 +2,39 @@ use std::ops::Sub;
 
 use clap::Parser;
 use cli::Cli;
-use futures::StreamExt;
+use futures::{Future, StreamExt};
 use komoot::models::Tour;
 
 mod cli;
 mod komoot;
 mod strava;
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::Cli::parse();
-    let http_client = reqwest::Client::new();
+    let http = reqwest::Client::new();
+    let (src, dest) = futures::join!(komoot(&cli.komoot, &http), strava(&cli.strava, &http));
 
-    let strava = strava::api::ApiContext::new(&http_client)
-        .auth(
-            &cli.strava.client_id,
-            &cli.strava.client_secret,
-            &cli.strava.refresh_token,
-        )
-        .await?;
+    sync(&cli, &src?, &dest?).await
+}
 
-    let komoot = komoot::api::ApiContext::new(&http_client)
-        .auth(&cli.komoot.user_name, &cli.komoot.password)
-        .await?;
+fn komoot<'a>(
+    opts: &'a cli::KomootOpts,
+    http_client: &'a reqwest::Client,
+) -> impl Future<Output = Result<komoot::api::ApiContext, Box<dyn std::error::Error>>> + 'a {
+    komoot::api::ApiContext::auth(&opts.user_name, &opts.password, &http_client)
+}
 
-    sync(&cli, &komoot, &strava).await
+fn strava<'a>(
+    opts: &'a cli::StravaOpts,
+    http_client: &'a reqwest::Client,
+) -> impl Future<Output = Result<strava::api::ApiContext, Box<dyn std::error::Error>>> + 'a {
+    strava::api::ApiContext::auth(
+        &opts.client_id,
+        &opts.client_secret,
+        &opts.refresh_token,
+        &http_client,
+    )
 }
 
 async fn sync(

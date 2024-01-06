@@ -5,7 +5,7 @@ use super::models::{Tour, ToursContainer};
 
 pub struct ApiContext {
     http: reqwest::Client,
-    user_context: Option<UserContext>,
+    user_context: UserContext,
 }
 
 #[derive(Debug, Deserialize)]
@@ -20,26 +20,19 @@ pub struct UserContext {
 impl ApiContext {
     const BASE_URL: &'static str = "https://api.komoot.de";
 
-    pub fn new(client: &reqwest::Client) -> Self {
-        Self {
-            http: client.clone(),
-            user_context: None,
-        }
-    }
-
     pub async fn auth(
-        &self,
         username: &str,
         password: &str,
+        client: &reqwest::Client,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let url = format!("{0}/v006/account/email/{1}/", Self::BASE_URL, username);
-        let req = self.http.get(url).basic_auth(username, Some(password));
+        let req = client.get(url).basic_auth(username, Some(password));
         let resp = req.send().await?.error_for_status()?;
         let ctx = resp.json::<UserContext>().await?;
 
         Ok(ApiContext {
-            http: self.http.clone(),
-            user_context: Some(ctx),
+            http: client.clone(),
+            user_context: ctx,
         })
     }
 
@@ -47,8 +40,6 @@ impl ApiContext {
         &self,
         start_date: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<Tour>, Box<dyn std::error::Error>> {
-        let ctx = self.context()?;
-
         let query_params = &[
             ("page", "0".to_owned()),
             ("type", "tour_recorded".to_owned()),
@@ -60,11 +51,15 @@ impl ApiContext {
             ),
         ];
 
-        let url = format!("{0}/v007/users/{1}/tours/", Self::BASE_URL, ctx.user_id);
+        let url = format!(
+            "{0}/v007/users/{1}/tours/",
+            Self::BASE_URL,
+            self.user_context.user_id
+        );
         let req = self
             .http
             .get(url)
-            .basic_auth(&ctx.email, Some(&ctx.token))
+            .basic_auth(&self.user_context.email, Some(&self.user_context.token))
             .query(query_params);
         let resp = req.send().await?.error_for_status()?;
         let tours = resp
@@ -77,18 +72,13 @@ impl ApiContext {
     }
 
     pub async fn download(&self, id: u32) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        let ctx = self.context()?;
         let url = format!("{0}/v007/tours/{1}.gpx", Self::BASE_URL, id);
-        let req = self.http.get(url).basic_auth(&ctx.email, Some(&ctx.token));
+        let req = self
+            .http
+            .get(url)
+            .basic_auth(&self.user_context.email, Some(&self.user_context.token));
         let resp = req.send().await?.error_for_status()?;
 
         Ok(resp.bytes().await?.to_vec())
-    }
-
-    fn context(&self) -> Result<&UserContext, Box<dyn std::error::Error>> {
-        self.user_context.as_ref().ok_or(format!(
-            "User context must not be empty. Make sure that {} is called before calling this method.",
-            stringify!(self.auth)
-        ).into())
     }
 }
