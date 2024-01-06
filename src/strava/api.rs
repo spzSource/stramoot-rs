@@ -1,17 +1,14 @@
-use futures::TryStreamExt;
 use oauth2::{
     basic::BasicClient, AccessToken, AuthUrl, ClientId, ClientSecret, RefreshToken, Scope,
     TokenResponse, TokenUrl,
 };
 use reqwest::multipart;
 
-use crate::komoot::models::DownloadError;
-
 use super::models::{UploadError, UploadStatus};
 
 #[derive(Debug)]
 pub struct ApiContext {
-    pub http: reqwest::Client,
+    pub http_client: reqwest::Client,
     pub access_token: Option<AccessToken>,
     pub refresh_token: Option<RefreshToken>,
 }
@@ -21,7 +18,7 @@ impl ApiContext {
 
     pub fn new(client: &reqwest::Client) -> Self {
         Self {
-            http: client.clone(),
+            http_client: client.clone(),
             access_token: None,
             refresh_token: None,
         }
@@ -50,7 +47,7 @@ impl ApiContext {
             .await?;
 
         Ok(Self {
-            http: self.http.clone(),
+            http_client: self.http_client.clone(),
             access_token: Some(token_response.access_token().to_owned()),
             refresh_token: token_response.refresh_token().map(|e| e.clone()),
         })
@@ -60,17 +57,13 @@ impl ApiContext {
         &self,
         external_id: &str,
         name: &str,
-        stream: impl futures::Stream<Item = Result<bytes::Bytes, DownloadError>> + Send + Sync + 'static,
+        content: &[u8],
     ) -> Result<UploadStatus, Box<dyn std::error::Error>> {
         let resp = self
-            .http
+            .http_client
             .post(format!("{}/api/v3/uploads", Self::BASE_URL))
             .bearer_auth(self.access_token().secret())
-            .multipart(Self::multipart_form(
-                external_id,
-                name,
-                stream.map_err(DownloadError::into),
-            ))
+            .multipart(Self::multipart_form(external_id, name, content))
             .send()
             .await?
             .error_for_status()?;
@@ -85,7 +78,7 @@ impl ApiContext {
         upload_id: i64,
     ) -> Result<UploadStatus, Box<dyn std::error::Error>> {
         let resp = self
-            .http
+            .http_client
             .get(format!("{}/api/v3/uploads/{}", Self::BASE_URL, upload_id))
             .bearer_auth(self.access_token().secret())
             .send()
@@ -117,15 +110,7 @@ impl ApiContext {
         }
     }
 
-    fn multipart_form(
-        external_id: &str,
-        name: &str,
-        content: impl futures::Stream<Item = Result<bytes::Bytes, reqwest::Error>>
-            + Sync
-            + Send
-            + 'static,
-    ) -> multipart::Form {
-        let sw = reqwest::Body::wrap_stream(content);
+    fn multipart_form(external_id: &str, name: &str, content: &[u8]) -> multipart::Form {
         multipart::Form::new()
             .text("trainer", "0")
             .text("commute", "0")
@@ -133,7 +118,7 @@ impl ApiContext {
             .text("activity_type", "ride")
             .text("name", name.to_string())
             .text("external_id", external_id.to_string())
-            .part("data", multipart::Part::stream(sw))
+            .part("data", multipart::Part::bytes(content.to_owned()))
     }
 
     fn access_token(&self) -> &AccessToken {

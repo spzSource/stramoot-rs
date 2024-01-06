@@ -12,9 +12,9 @@ mod strava;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::Cli::parse();
-    let http = reqwest::Client::new();
+    let http_client = reqwest::Client::new();
 
-    let strava = strava::api::ApiContext::new(&http)
+    let strava = strava::api::ApiContext::new(&http_client)
         .auth(
             &cli.strava.client_id,
             &cli.strava.client_secret,
@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .await?;
 
-    let komoot = komoot::api::ApiContext::new(&http)
+    let komoot = komoot::api::ApiContext::new(&http_client)
         .auth(&cli.komoot.user_name, &cli.komoot.password)
         .await?;
 
@@ -37,7 +37,7 @@ async fn sync(
     let tours = src.tours(chrono::Utc::now().sub(cli.interval)).await?;
 
     let results: Vec<_> = futures::stream::iter(tours)
-        .map(|t| sync_tour(t, &src, &dest))
+        .map(|t| sync_tour(&src, &dest, t))
         .buffered(3)
         .collect()
         .await;
@@ -51,12 +51,14 @@ async fn sync(
 }
 
 async fn sync_tour(
-    tour: Tour,
     src: &komoot::api::ApiContext,
     dest: &strava::api::ApiContext,
+    tour: Tour,
 ) -> Result<u32, Box<dyn std::error::Error>> {
+    let content = src.download(tour.id).await?;
+
     let status = dest
-        .upload(&tour.id.to_string(), &tour.name, src.stream(tour.id).await?)
+        .upload(&tour.id.to_string(), &tour.name, &content)
         .await?;
 
     dest.wait_for_upload(status.id, 10, chrono::Duration::seconds(1))
