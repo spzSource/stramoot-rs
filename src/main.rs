@@ -42,12 +42,14 @@ async fn sync(
     src: &komoot::api::ApiContext,
     dest: &strava::api::ApiContext,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    const BATCH_SIZE: u8 = 3;
+
     let mut stream = src
-        .tours_stream(chrono::Utc::now().sub(cli.interval), 3)
+        .tours_stream(chrono::Utc::now().sub(cli.interval), BATCH_SIZE)
         .boxed();
 
     while let Some(tours) = stream.try_next().await? {
-        sync_batch(tours, src, dest)
+        sync_batch(&tours, src, dest)
             .await
             .into_iter()
             .for_each(|r| match r {
@@ -60,13 +62,13 @@ async fn sync(
 }
 
 async fn sync_batch(
-    tours: Vec<Tour>,
+    tours: &Vec<Tour>,
     src: &komoot::api::ApiContext,
     dest: &strava::api::ApiContext,
 ) -> Vec<Result<u32, Box<dyn std::error::Error>>> {
     futures::stream::iter(tours)
         .map(|t| sync_tour(&src, &dest, t))
-        .buffered(3)
+        .buffered(tours.len())
         .collect()
         .await
 }
@@ -74,7 +76,7 @@ async fn sync_batch(
 async fn sync_tour(
     src: &komoot::api::ApiContext,
     dest: &strava::api::ApiContext,
-    tour: Tour,
+    tour: &Tour,
 ) -> Result<u32, Box<dyn std::error::Error>> {
     let content = src.download(tour.id).await?;
 
