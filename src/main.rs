@@ -2,7 +2,7 @@ use std::ops::Sub;
 
 use clap::Parser;
 use cli::Cli;
-use futures::{Future, StreamExt};
+use futures::{Future, StreamExt, TryStreamExt};
 use komoot::models::Tour;
 
 mod cli;
@@ -42,20 +42,33 @@ async fn sync(
     src: &komoot::api::ApiContext,
     dest: &strava::api::ApiContext,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let tours = src.tours(chrono::Utc::now().sub(cli.interval)).await?;
+    let mut stream = src
+        .tours_stream(chrono::Utc::now().sub(cli.interval), 3)
+        .boxed();
 
-    let results: Vec<_> = futures::stream::iter(tours)
+    while let Some(tours) = stream.try_next().await? {
+        sync_batch(tours, src, dest)
+            .await
+            .into_iter()
+            .for_each(|r| match r {
+                Ok(id) => println!("Tour {} uploaded", id),
+                Err(e) => eprintln!("Processing error. {}", e),
+            });
+    }
+
+    Ok(())
+}
+
+async fn sync_batch(
+    tours: Vec<Tour>,
+    src: &komoot::api::ApiContext,
+    dest: &strava::api::ApiContext,
+) -> Vec<Result<u32, Box<dyn std::error::Error>>> {
+    futures::stream::iter(tours)
         .map(|t| sync_tour(&src, &dest, t))
         .buffered(3)
         .collect()
-        .await;
-
-    results.into_iter().for_each(|r| match r {
-        Ok(id) => println!("Tour {} uploaded", id),
-        Err(e) => eprintln!("Processing error. {}", e),
-    });
-
-    Ok(())
+        .await
 }
 
 async fn sync_tour(

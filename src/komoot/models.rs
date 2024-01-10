@@ -15,7 +15,15 @@ pub(super) struct Embedded {
 }
 
 #[derive(Debug, Deserialize)]
+pub(super) struct Page {
+    #[serde(rename = "totalPages")]
+    pub(super) total_pages: u16,
+}
+
+#[derive(Debug, Deserialize)]
 pub(super) struct ToursContainer {
     #[serde(rename = "_embedded")]
     pub(super) embedded: Option<Embedded>,
+
+    pub(super) page: Page,
 }
