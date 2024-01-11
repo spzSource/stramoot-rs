@@ -2,7 +2,7 @@ use std::ops::Sub;
 
 use clap::Parser;
 use cli::Cli;
-use futures::{Future, StreamExt, TryStreamExt};
+use futures::{Future, StreamExt};
 use komoot::models::Tour;
 
 mod cli;
@@ -14,8 +14,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::Cli::parse();
     let http = reqwest::Client::new();
     let (src, dest) = futures::join!(komoot(&cli.komoot, &http), strava(&cli.strava, &http));
+    let sync_results = sync(&cli, &src?, &dest?, cli.batch_size).await;
 
-    sync(&cli, &src?, &dest?, cli.batch_size).await
+    for sr in sync_results {
+        match sr {
+            Ok(id) => println!("Tour {} uploaded", id),
+            Err(e) => eprintln!("Processing error. {}", e),
+        }
+    }
+
+    Ok(())
 }
 
 fn komoot<'a>(
@@ -42,34 +50,13 @@ async fn sync(
     src: &komoot::api::ApiContext,
     dest: &strava::api::ApiContext,
     batch_size: u8,
-) -> Result<(), Box<dyn std::error::Error>> {
-    src.tours_stream(chrono::Utc::now().sub(cli.interval), batch_size)
-        .try_for_each_concurrent(None, |tours| async move {
-            println!("Processing batch of {} tours", tours.len());
-            sync_batch(&tours, src, dest)
-                .await
-                .into_iter()
-                .for_each(|r| match r {
-                    Ok(id) => println!("Tour {} uploaded", id),
-                    Err(e) => eprintln!("Processing error. {}", e),
-                });
-
-            Ok(())
-        })
-        .await?;
-
-    Ok(())
-}
-
-async fn sync_batch(
-    tours: &Vec<Tour>,
-    src: &komoot::api::ApiContext,
-    dest: &strava::api::ApiContext,
 ) -> Vec<Result<u32, Box<dyn std::error::Error>>> {
-    futures::stream::iter(tours)
-        .map(|t| sync_tour(&src, &dest, t))
-        .buffered(tours.len())
-        .collect()
+    let start = chrono::Utc::now().sub(cli.interval);
+    src.tours_stream(start, batch_size)
+        .flat_map(|result| futures::stream::iter(res_to_vec(result)))
+        .map(|tour| async { sync_tour(src, dest, &tour?).await })
+        .buffered(batch_size as usize)
+        .collect::<Vec<_>>()
         .await
 }
 
@@ -88,4 +75,11 @@ async fn sync_tour(
         .await?;
 
     Ok(tour.id)
+}
+
+fn res_to_vec<T, E>(res: Result<Vec<T>, E>) -> Vec<Result<T, E>> {
+    match res {
+        Ok(vec) => vec.into_iter().map(Ok).collect(),
+        Err(err) => vec![Err(err)],
+    }
 }
