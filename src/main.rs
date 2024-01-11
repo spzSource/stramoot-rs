@@ -15,7 +15,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let http = reqwest::Client::new();
     let (src, dest) = futures::join!(komoot(&cli.komoot, &http), strava(&cli.strava, &http));
 
-    sync(&cli, &src?, &dest?).await
+    sync(&cli, &src?, &dest?, cli.batch_size).await
 }
 
 fn komoot<'a>(
@@ -41,22 +41,22 @@ async fn sync(
     cli: &Cli,
     src: &komoot::api::ApiContext,
     dest: &strava::api::ApiContext,
+    batch_size: u8,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    const BATCH_SIZE: u8 = 3;
+    src.tours_stream(chrono::Utc::now().sub(cli.interval), batch_size)
+        .try_for_each_concurrent(None, |tours| async move {
+            println!("Processing batch of {} tours", tours.len());
+            sync_batch(&tours, src, dest)
+                .await
+                .into_iter()
+                .for_each(|r| match r {
+                    Ok(id) => println!("Tour {} uploaded", id),
+                    Err(e) => eprintln!("Processing error. {}", e),
+                });
 
-    let mut stream = src
-        .tours_stream(chrono::Utc::now().sub(cli.interval), BATCH_SIZE)
-        .boxed();
-
-    while let Some(tours) = stream.try_next().await? {
-        sync_batch(&tours, src, dest)
-            .await
-            .into_iter()
-            .for_each(|r| match r {
-                Ok(id) => println!("Tour {} uploaded", id),
-                Err(e) => eprintln!("Processing error. {}", e),
-            });
-    }
+            Ok(())
+        })
+        .await?;
 
     Ok(())
 }
