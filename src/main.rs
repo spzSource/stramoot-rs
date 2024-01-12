@@ -2,7 +2,7 @@ use std::ops::Sub;
 
 use clap::Parser;
 use cli::Cli;
-use futures::{Future, StreamExt};
+use futures::{stream, Future, StreamExt};
 use komoot::models::Tour;
 
 mod cli;
@@ -14,14 +14,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = cli::Cli::parse();
     let http = reqwest::Client::new();
     let (src, dest) = futures::join!(komoot(&cli.komoot, &http), strava(&cli.strava, &http));
-    let sync_results = sync(&cli, &src?, &dest?, cli.batch_size).await;
 
-    for sr in sync_results {
-        match sr {
+    sync(&cli, &src?, &dest?)
+        .await
+        .into_iter()
+        .for_each(|sr| match sr {
             Ok(id) => println!("Tour {} uploaded", id),
             Err(e) => eprintln!("Processing error. {}", e),
-        }
-    }
+        });
 
     Ok(())
 }
@@ -49,13 +49,12 @@ async fn sync(
     cli: &Cli,
     src: &komoot::api::ApiContext,
     dest: &strava::api::ApiContext,
-    batch_size: u8,
 ) -> Vec<Result<u32, Box<dyn std::error::Error>>> {
     let start = chrono::Utc::now().sub(cli.interval);
-    src.tours_stream(start, batch_size)
-        .flat_map(|result| futures::stream::iter(res_to_vec(result)))
+    src.tours_stream(start, cli.batch_size)
+        .flat_map(|result| stream::iter(res_to_vec(result)))
         .map(|tour| async { sync_tour(src, dest, &tour?).await })
-        .buffered(batch_size as usize)
+        .buffer_unordered(cli.batch_size as usize)
         .collect::<Vec<_>>()
         .await
 }
