@@ -1,3 +1,5 @@
+use std::error;
+
 use chrono::FixedOffset;
 use futures::{
     stream::{self},
@@ -29,7 +31,7 @@ impl ApiContext {
         username: &str,
         password: &str,
         client: &reqwest::Client,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, Box<dyn error::Error>> {
         let url = format!("{0}/v006/account/email/{1}/", Self::BASE_URL, username);
         let req = client.get(url).basic_auth(username, Some(password));
         let resp = req.send().await?.error_for_status()?;
@@ -45,7 +47,7 @@ impl ApiContext {
         &'a self,
         start_date: chrono::DateTime<chrono::Utc>,
         page_size: u8,
-    ) -> impl Stream<Item = Result<Vec<Tour>, Box<dyn std::error::Error>>> + 'a {
+    ) -> impl Stream<Item = Result<Vec<Tour>, Box<dyn error::Error>>> + 'a {
         stream::try_unfold((0, None), move |state| async move {
             match state {
                 (curr_page, Some(total_pages)) if curr_page >= total_pages => Ok(None),
@@ -62,7 +64,7 @@ impl ApiContext {
         start_date: chrono::DateTime<chrono::Utc>,
         page: u16,
         limit: u8,
-    ) -> Result<(Vec<Tour>, u16), Box<dyn std::error::Error>> {
+    ) -> Result<(Vec<Tour>, u16), Box<dyn error::Error>> {
         let start_date = start_date
             .with_timezone::<FixedOffset>(&chrono::FixedOffset::west_opt(7 * 3600).unwrap())
             .to_rfc3339_opts(chrono::SecondsFormat::Millis, false);
@@ -93,7 +95,7 @@ impl ApiContext {
         ))
     }
 
-    pub async fn download(&self, id: u32) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub async fn download(&self, id: u32) -> Result<Vec<u8>, Box<dyn error::Error>> {
         let url = format!("{0}/v007/tours/{1}.gpx", Self::BASE_URL, id);
         let req = self
             .http
