@@ -1,8 +1,8 @@
 use std::ops::Sub;
 
 use clap::Parser;
-use cli::Cli;
-use futures::{stream, Future, StreamExt};
+use cli::{Cli, CommonOpts};
+use futures::{stream, StreamExt};
 use komoot::models::Tour;
 
 mod cli;
@@ -11,11 +11,24 @@ mod strava;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = cli::Cli::parse();
-    let http = reqwest::Client::new();
-    let (src, dest) = futures::join!(komoot(&cli.komoot, &http), strava(&cli.strava, &http));
+    let Cli {
+        komoot,
+        strava,
+        common,
+    } = cli::Cli::parse();
 
-    sync(&cli, &src?, &dest?)
+    let http = reqwest::Client::new();
+    let (src, dest) = futures::join!(
+        komoot::api::ApiContext::auth(&komoot.username, &komoot.password, &http),
+        strava::api::ApiContext::auth(
+            &strava.client_id,
+            &strava.client_secret,
+            &strava.refresh_token,
+            &http,
+        )
+    );
+
+    sync(&src?, &dest?, &common)
         .await
         .into_iter()
         .for_each(|sr| match sr {
@@ -26,35 +39,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn komoot<'a>(
-    opts: &'a cli::KomootOpts,
-    http_client: &'a reqwest::Client,
-) -> impl Future<Output = Result<komoot::api::ApiContext, Box<dyn std::error::Error>>> + 'a {
-    komoot::api::ApiContext::auth(&opts.username, &opts.password, &http_client)
-}
-
-fn strava<'a>(
-    opts: &'a cli::StravaOpts,
-    http_client: &'a reqwest::Client,
-) -> impl Future<Output = Result<strava::api::ApiContext, Box<dyn std::error::Error>>> + 'a {
-    strava::api::ApiContext::auth(
-        &opts.client_id,
-        &opts.client_secret,
-        &opts.refresh_token,
-        &http_client,
-    )
-}
-
 async fn sync(
-    cli: &Cli,
     src: &komoot::api::ApiContext,
     dest: &strava::api::ApiContext,
+    opts: &CommonOpts,
 ) -> Vec<Result<u32, Box<dyn std::error::Error>>> {
-    let start = chrono::Utc::now().sub(cli.interval);
-    src.tours_stream(start, cli.batch_size)
+    let start = chrono::Utc::now().sub(opts.interval);
+    src.tours_stream(start, opts.batch_size)
         .flat_map(|result| stream::iter(res_to_vec(result)))
         .map(|tour| async { sync_tour(src, dest, &tour?).await })
-        .buffer_unordered(cli.batch_size as usize)
+        .buffer_unordered(opts.batch_size as usize)
         .collect::<Vec<_>>()
         .await
 }

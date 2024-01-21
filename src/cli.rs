@@ -9,11 +9,8 @@ pub struct Cli {
     #[clap(flatten)]
     pub strava: StravaOpts,
 
-    #[clap(short = 'i', long = "interval", value_parser = parse_iso8601, default_value = "P2DT")]
-    pub interval: std::time::Duration,
-
-    #[clap(short = 'b', long = "batch-size", default_value = "10")]
-    pub batch_size: u8,
+    #[clap(flatten)]
+    pub common: CommonOpts,
 }
 
 fn parse_iso8601(duration: &str) -> Result<std::time::Duration, clap::Error> {
@@ -21,6 +18,15 @@ fn parse_iso8601(duration: &str) -> Result<std::time::Duration, clap::Error> {
         .map_err(|_| Error::new(ErrorKind::InvalidValue))?
         .to_std()
         .ok_or(Error::new(ErrorKind::InvalidValue))
+}
+
+#[derive(Debug, Args)]
+pub struct CommonOpts {
+    #[clap(short = 'i', long = "interval", value_parser = parse_iso8601, default_value = "P2DT")]
+    pub interval: std::time::Duration,
+
+    #[clap(short = 'b', long = "batch-size", default_value = "10")]
+    pub batch_size: u8,
 }
 
 #[derive(Debug, Args)]
