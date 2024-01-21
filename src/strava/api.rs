@@ -94,7 +94,7 @@ impl ApiContext {
         let mut retries = 0;
 
         loop {
-            match self.upload_status(upload_id).await?.to_result() {
+            match self.upload_status(upload_id).await?.into() {
                 Err(err @ UploadError::InProgress { id: _ }) if retries < attempts => {
                     retries += 1;
                     println!("{}, retrying after {}", err, delay);

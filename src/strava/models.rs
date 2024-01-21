@@ -15,8 +15,8 @@ pub struct UploadStatus {
     pub activity_id: Option<String>,
 }
 
-impl UploadStatus {
-    pub fn to_result(&self) -> Result<(), UploadError> {
+impl Into<Result<(), UploadError>> for UploadStatus {
+    fn into(self) -> Result<(), UploadError> {
         if let Some(error) = &self.error {
             Err(UploadError::Failed {
                 id: self.id,
