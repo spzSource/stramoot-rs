@@ -30,7 +30,7 @@ fn komoot<'a>(
     opts: &'a cli::KomootOpts,
     http_client: &'a reqwest::Client,
 ) -> impl Future<Output = Result<komoot::api::ApiContext, Box<dyn std::error::Error>>> + 'a {
-    komoot::api::ApiContext::auth(&opts.user_name, &opts.password, &http_client)
+    komoot::api::ApiContext::auth(&opts.username, &opts.password, &http_client)
 }
 
 fn strava<'a>(

@@ -26,7 +26,7 @@ fn parse_iso8601(duration: &str) -> Result<std::time::Duration, clap::Error> {
 #[derive(Debug, Args)]
 pub struct KomootOpts {
     #[clap(long = "komoot-username")]
-    pub user_name: String,
+    pub username: String,
 
     #[clap(long = "komoot-password")]
     pub password: String,
