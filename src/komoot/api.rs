@@ -37,7 +37,7 @@ impl ApiContext {
         let resp = req.send().await?.error_for_status()?;
         let ctx = resp.json::<UserContext>().await?;
 
-        Ok(ApiContext {
+        Ok(Self {
             http: client.clone(),
             user_context: ctx,
         })
