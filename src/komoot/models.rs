@@ -7,6 +7,21 @@ pub struct Tour {
     pub status: String,
     pub r#type: String,
     pub date: String,
+    pub sport: Sport,
+}
+
+#[derive(Debug, Deserialize)]
+pub enum Sport {
+    #[serde(rename = "hike")]
+    Hike,
+    #[serde(rename = "mtb_easy")]
+    MTB,
+    #[serde(rename = "racebike")]
+    RaceBike,
+    #[serde(rename = "touringbicycle")]
+    Touring,
+    #[serde(rename = "jogging")]
+    Jogging,
 }
 
 #[derive(Debug, Deserialize)]

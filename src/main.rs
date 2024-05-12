@@ -3,7 +3,7 @@ use std::ops::Sub;
 use clap::Parser;
 use cli::{Cli, CommonOpts};
 use futures::{stream, StreamExt};
-use komoot::models::Tour;
+use komoot::models::{Sport, Tour};
 
 mod cli;
 mod komoot;
@@ -61,13 +61,26 @@ async fn sync_tour(
     let content = src.download(tour.id).await?;
 
     let status = dest
-        .upload(&tour.id.to_string(), &tour.name, &content)
+        .upload(
+            &tour.id.to_string(),
+            &tour.name,
+            to_kind(&tour.sport).as_str(),
+            &content,
+        )
         .await?;
 
-    dest.wait_for_upload(status.id, 10, chrono::Duration::seconds(1))
+    let attempts = 10;
+    dest.wait_for_upload(status.id, attempts, chrono::Duration::seconds(1))
         .await?;
 
     Ok(tour.id)
+}
+
+fn to_kind(sport: &Sport) -> String {
+    match sport {
+        Sport::Hike => "Hike".to_string(),
+        _ => "Ride".to_string(),
+    }
 }
 
 fn res_to_vec<T, E>(res: Result<Vec<T>, E>) -> Vec<Result<T, E>> {

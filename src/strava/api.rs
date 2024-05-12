@@ -52,13 +52,14 @@ impl ApiContext {
         &self,
         external_id: &str,
         name: &str,
+        kind: &str,
         content: &[u8],
     ) -> Result<UploadStatus, Box<dyn std::error::Error>> {
         let resp = self
             .http_client
             .post(format!("{}/api/v3/uploads", Self::BASE_URL))
             .bearer_auth(self.access_token.secret())
-            .multipart(Self::multipart_form(external_id, name, content))
+            .multipart(Self::multipart_form(external_id, name, kind, content))
             .send()
             .await?
             .error_for_status()?;
@@ -105,12 +106,17 @@ impl ApiContext {
         }
     }
 
-    fn multipart_form(external_id: &str, name: &str, content: &[u8]) -> multipart::Form {
+    fn multipart_form(
+        external_id: &str,
+        name: &str,
+        kind: &str,
+        content: &[u8],
+    ) -> multipart::Form {
         multipart::Form::new()
             .text("trainer", "0")
             .text("commute", "0")
             .text("data_type", "gpx")
-            .text("activity_type", "ride")
+            .text("activity_type", kind.to_string())
             .text("name", name.to_string())
             .text("external_id", external_id.to_string())
             .part("data", multipart::Part::bytes(content.to_owned()))
